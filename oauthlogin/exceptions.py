@@ -11,6 +11,8 @@ class OAuthStateMismatchError(OAuthError):
 class OAuthCannotDisconnectError(OAuthError):
     pass
 
+class OAuthCannotConnectError(OAuthError):
+    pass
 
 class OAuthUserAlreadyExistsError(OAuthError):
     pass

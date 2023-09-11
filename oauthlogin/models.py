@@ -6,8 +6,9 @@ from django.core.checks import Error
 from django.db import models
 from django.db.utils import IntegrityError, OperationalError, ProgrammingError
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
-from .exceptions import OAuthUserAlreadyExistsError
+from .exceptions import OAuthUserAlreadyExistsError,OAuthCannotConnectError
 
 if TYPE_CHECKING:
     from .providers import OAuthToken, OAuthUser
@@ -41,7 +42,8 @@ class OAuthConnection(models.Model):
     class Meta:
         unique_together = ("provider_key", "provider_user_id")
         ordering = ("provider_key",)
-        verbose_name = "OAuth Connection"
+        verbose_name = _("OAuth Connection")
+        verbose_name_plural = _("OAuth Connections")
 
     def __str__(self):
         return f"{self.provider_key}[{self.user}:{self.provider_user_id}]"
@@ -130,14 +132,17 @@ class OAuthConnection(models.Model):
         """
         Connect will either create a new connection or update an existing connection
         """
-        connection, _ = cls.objects.get_or_create(
-            user=user,
-            provider_key=provider_key,
-            provider_user_id=oauth_user.id,
-        )
-        connection.set_user_fields(oauth_user)
-        connection.set_token_fields(oauth_token)
-        connection.save()
+        try:
+            connection, _ = cls.objects.get_or_create(
+                user=user,
+                provider_key=provider_key,
+                provider_user_id=oauth_user.id,
+            )
+            connection.set_user_fields(oauth_user)
+            connection.set_token_fields(oauth_token)
+            connection.save()
+        except IntegrityError:
+            raise OAuthCannotConnectError()
         return connection
 
     @classmethod

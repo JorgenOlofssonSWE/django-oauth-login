@@ -9,6 +9,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from django.utils.module_loading import import_string
+from django.utils.translation import gettext_lazy as _
 
 from .exceptions import OAuthCannotDisconnectError, OAuthStateMismatchError
 from .models import OAuthConnection
@@ -139,7 +140,7 @@ class OAuthProvider:
             connection.delete()
         else:
             raise OAuthCannotDisconnectError(
-                "Cannot remove last OAuth connection without a usable password"
+                _("Cannot remove last OAuth connection without a usable password")
             )
 
         redirect_url = self.get_disconnect_redirect_url(request=request)

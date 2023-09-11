@@ -1,9 +1,11 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.utils.translation import gettext_lazy as _
 from django.shortcuts import redirect, render
 from django.views import View
 
 from .exceptions import (
     OAuthCannotDisconnectError,
+    OAuthCannotConnectError,
     OAuthStateMismatchError,
     OAuthUserAlreadyExistsError,
 )
@@ -12,7 +14,7 @@ from .providers import get_oauth_provider_instance
 
 class OAuthLoginView(View):
     def post(self, request, provider):
-        if request.user.is_authenticated:
+        if request.user.is_authenticated and request.user.oauth_connections.exists():
             return redirect("/")
 
         provider_instance = get_oauth_provider_instance(provider_key=provider)
@@ -33,7 +35,7 @@ class OAuthCallbackView(View):
                 request,
                 "oauthlogin/error.html",
                 {
-                    "oauth_error": "A user already exists with this email address. Please log in first and then connect this OAuth provider to the existing account."
+                    "oauth_error": _("A user already exists with this email address. Please log in first and then connect this OAuth provider to the existing account.")
                 },
                 status=400,
             )
@@ -41,9 +43,17 @@ class OAuthCallbackView(View):
             return render(
                 request,
                 "oauthlogin/error.html",
-                {"oauth_error": "The state parameter did not match. Please try again."},
+                {"oauth_error": _("The state parameter did not match. Please try again.")},
                 status=400,
             )
+        except OAuthCannotConnectError:
+            return render(
+                request,
+                "oauthlogin/error.html",
+                {"oauth_error": _("Cannot connect, you have already connected your email address to another user in this system.")},
+                status=400,
+            )
+
 
 
 class OAuthConnectView(LoginRequiredMixin, View):
@@ -62,7 +72,7 @@ class OAuthDisconnectView(LoginRequiredMixin, View):
                 request,
                 "oauthlogin/error.html",
                 {
-                    "oauth_error": "This connection can't be removed. You must have a usable password or at least one active connection."
+                    "oauth_error": _("This connection can't be removed. You must have a usable password or at least one active connection.")
                 },
                 status=400,
             )

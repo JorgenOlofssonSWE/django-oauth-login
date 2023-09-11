@@ -94,4 +94,12 @@ OAUTH_LOGIN_PROVIDERS = {
             "scope": "read_user",
         },
     },
+     "google": {
+        "class": "providers.google.GoogleOAuthProvider",
+        "kwargs": {
+            "client_id": environ.get("GOOGLE_APPLICATION_ID"),
+            "client_secret": environ.get("GOOGLE_APPLICATION_SECRET"),
+            "scope": "read_user",
+        },
+    },
 }
