@@ -6,7 +6,8 @@ class OAuthError(Exception):
 
 class OAuthStateMismatchError(OAuthError):
     pass
-
+class OAuthNonceMismatchError(OAuthError):
+    pass
 
 class OAuthCannotDisconnectError(OAuthError):
     pass

@@ -7,6 +7,7 @@ from .exceptions import (
     OAuthCannotDisconnectError,
     OAuthCannotConnectError,
     OAuthStateMismatchError,
+    OAuthNonceMismatchError,
     OAuthUserAlreadyExistsError,
 )
 from .providers import get_oauth_provider_instance
@@ -44,6 +45,13 @@ class OAuthCallbackView(View):
                 request,
                 "oauthlogin/error.html",
                 {"oauth_error": _("The state parameter did not match. Please try again.")},
+                status=400,
+            )
+        except OAuthNonceMismatchError:
+            return render(
+                request,
+                "oauthlogin/error.html",
+                {"oauth_error": _("The nonce parameter did not match. Please try again.")},
                 status=400,
             )
         except OAuthCannotConnectError:

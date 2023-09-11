@@ -11,11 +11,12 @@ from django.utils.crypto import get_random_string
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
-from .exceptions import OAuthCannotDisconnectError, OAuthStateMismatchError
+from .exceptions import OAuthCannotDisconnectError, OAuthStateMismatchError,OAuthNonceMismatchError
 from .models import OAuthConnection
 
 SESSION_STATE_KEY = "oauthlogin_state"
 SESSION_NEXT_KEY = "oauthlogin_next"
+SESSION_NONCE_KEY = "oauthlogin_nonce"
 
 
 class OAuthToken:
@@ -71,6 +72,7 @@ class OAuthProvider:
             "client_id": self.get_client_id(),
             "scope": self.get_scope(),
             "state": self.generate_state(),
+            "nonce": self.generate_nonce(),
             "response_type": "code",
         }
 
@@ -101,12 +103,21 @@ class OAuthProvider:
 
     def generate_state(self) -> str:
         return get_random_string(length=32)
+    
+    def generate_nonce(self) -> str:
+        return get_random_string(length=16)
 
     def check_request_state(self, *, request: HttpRequest) -> None:
         state = request.GET["state"]
         expected_state = request.session.pop(SESSION_STATE_KEY)
         if not secrets.compare_digest(state, expected_state):
             raise OAuthStateMismatchError()
+        
+    def check_request_nonce(self, *, request: HttpRequest) -> None:
+        nonce = request.GET["nonce"]
+        expected_nonce = request.session.pop(SESSION_NONCE_KEY)
+        if not secrets.compare_digest(nonce, expected_nonce):
+            raise OAuthNonceMismatchError()
 
     def handle_login_request(self, *, request: HttpRequest) -> HttpResponse:
         authorization_url = self.get_authorization_url(request=request)
@@ -115,6 +126,10 @@ class OAuthProvider:
         if "state" in authorization_params:
             # Store the state in the session so we can check on callback
             request.session[SESSION_STATE_KEY] = authorization_params["state"]
+        
+        if "nonce" in authorization_params:
+            # Store the nonce in the session so we can check on callback
+            request.session[SESSION_NONCE_KEY] = authorization_params["nonce"]
 
         if "next" in request.POST:
             # Store in session so we can get it on the callback request
@@ -148,6 +163,7 @@ class OAuthProvider:
 
     def handle_callback_request(self, *, request: HttpRequest) -> HttpResponse:
         self.check_request_state(request=request)
+       
 
         oauth_token = self.get_oauth_token(code=request.GET["code"], request=request)
         oauth_user = self.get_oauth_user(oauth_token=oauth_token)
