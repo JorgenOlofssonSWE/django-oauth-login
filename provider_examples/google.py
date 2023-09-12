@@ -9,11 +9,12 @@ from oauthlogin.providers import OAuthProvider, OAuthToken, OAuthUser
 # This is the Google OAuth provider
 class GoogleOAuthProvider(OAuthProvider):
     authorization_url = "https://accounts.google.com/o/oauth2/v2/auth"
-
     discovery_document_url = "https://accounts.google.com/.well-known/openid-configuration"
+
     google_token_url = "https://oauth2.googleapis.com/token"
     google_user_url = "https://www.googleapis.com/oauth2/v3/userinfo"
     google_emails_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+    redirect_uri = "http://127.0.0.1:8000/oauth/google/callback/" 
 
     def _get_token(self, request_data,redirect_uri=None):
         if redirect_uri:
@@ -27,14 +28,18 @@ class GoogleOAuthProvider(OAuthProvider):
             },
             data=request_data,
         )
+
         response.raise_for_status()
         data = response.json()
-
+      
+        id_token = data.get("id_token",'')
+        decoded_token = jwt.decode(id_token, options={"verify_signature": False})  # Decode without verification
+        nonce_in_id_token = decoded_token.get("nonce", "")
         oauth_token = OAuthToken(
-            access_token=data["access_token"],
+            access_token=data["access_token"]
         )
 
-        # Expiration and refresh tokens are optional
+        # Expiration and refresh tokens are optional in Google depending on the access_type (offline/online)
         if "expires_in" in data:
             oauth_token.access_token_expires_at = timezone.now() + datetime.timedelta(
                 seconds=data["expires_in"]
@@ -48,7 +53,7 @@ class GoogleOAuthProvider(OAuthProvider):
                 seconds=data["refresh_token_expires_in"]
             )
 
-        return oauth_token
+        return oauth_token, nonce_in_id_token
 
     def get_oauth_token(self, *, code, request):
         redirect_uri = self.redirect_uri
@@ -82,28 +87,16 @@ class GoogleOAuthProvider(OAuthProvider):
         response.raise_for_status()
         data = response.json()
         user_id = data.get("sub",None)
-        #username = data["name"]
-
-        # Use the verified, primary email address
-        response = requests.get(
-            self.google_emails_url,
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Bearer {oauth_token.access_token}",
-            },
-        )
-        response.raise_for_status()
         verified_primary_email=None
-        data=response.json()
+       
         if data.get('email_verified',False):
             verified_primary_email=data.get('email',None)
 
         if not verified_primary_email:      
             raise OAuthError(_("A verified primary email address is required on Google"))
-
+     
         return OAuthUser(
             id=user_id,
             email=verified_primary_email,
             username=verified_primary_email, #username,
         )
-    
