@@ -105,24 +105,23 @@ class OAuthProvider:
         return get_random_string(length=32)
     
     def generate_nonce(self) -> str:
-        return get_random_string(length=16)
+        return get_random_string(length=24)
 
     def check_request_state(self, *, request: HttpRequest) -> None:
         state = request.GET["state"]
-        expected_state = request.session.pop(SESSION_STATE_KEY)
+        expected_state = request.session.pop(SESSION_STATE_KEY,'')
         if not secrets.compare_digest(state, expected_state):
             raise OAuthStateMismatchError()
         
-    def check_request_nonce(self, *, request: HttpRequest) -> None:
-        nonce = request.GET["nonce"]
-        expected_nonce = request.session.pop(SESSION_NONCE_KEY)
-        if not secrets.compare_digest(nonce, expected_nonce):
+    def check_id_token_nonce(self, *, returned_nonce:str, request: HttpRequest) -> None:
+        expected_nonce = request.session.pop(SESSION_NONCE_KEY,'')
+        if not secrets.compare_digest(returned_nonce, expected_nonce):
             raise OAuthNonceMismatchError()
 
     def handle_login_request(self, *, request: HttpRequest) -> HttpResponse:
         authorization_url = self.get_authorization_url(request=request)
         authorization_params = self.get_authorization_url_params(request=request)
-
+        
         if "state" in authorization_params:
             # Store the state in the session so we can check on callback
             request.session[SESSION_STATE_KEY] = authorization_params["state"]
@@ -138,6 +137,7 @@ class OAuthProvider:
         # Sort authorization params for consistency
         sorted_authorization_params = sorted(authorization_params.items())
         redirect_url = authorization_url + "?" + urlencode(sorted_authorization_params)
+       
         return HttpResponseRedirect(redirect_url)
 
     def handle_connect_request(self, *, request: HttpRequest) -> HttpResponse:
@@ -163,11 +163,17 @@ class OAuthProvider:
 
     def handle_callback_request(self, *, request: HttpRequest) -> HttpResponse:
         self.check_request_state(request=request)
+
+        result = self.get_oauth_token(code=request.GET["code"], request=request)
+        if isinstance(result, tuple) and len(result) == 2:
+            # If we get a tuple back, it's (oauth_token, id_token_nonce)
+            oauth_token, id_token_nonce = result
+            self.check_id_token_nonce(returned_nonce=id_token_nonce, request=request)
+        else:
+            oauth_token = result
        
-
-        oauth_token = self.get_oauth_token(code=request.GET["code"], request=request)
         oauth_user = self.get_oauth_user(oauth_token=oauth_token)
-
+       
         if request.user.is_authenticated:
             connection = OAuthConnection.connect(
                 user=request.user,
@@ -219,3 +225,4 @@ def get_oauth_provider_instance(*, provider_key: str) -> OAuthProvider:
 
 def get_provider_keys() -> List[str]:
     return list(getattr(settings, "OAUTH_LOGIN_PROVIDERS", {}).keys())
+
