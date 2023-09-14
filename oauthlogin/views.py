@@ -85,16 +85,6 @@ class OAuthCallbackView(View):
                 {"oauth_error": _("The id_token did not validate correctly.")},
                 status=400,
             )
-        except OAuthProviderNotConfiguredError:
-            print ('FUUU')
-            return render(
-                request,
-                "oauthlogin/error.html",
-                {"oauth_error": _("Provider is not configured.")},
-                status=400,
-            )
-
-
 
 class OAuthConnectView(LoginRequiredMixin, View):
     def post(self, request, provider):

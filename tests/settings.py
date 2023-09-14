@@ -102,4 +102,15 @@ OAUTH_LOGIN_PROVIDERS = {
             "scope": "read_user",
         },
     },
+     "microsoft": {
+        "class": "providers.microsoft.MicrosoftOAuthProvider",
+        "kwargs": {
+            "client_id": environ.get("MICROSOFT_APPLICATION_ID"),
+            "client_secret": environ.get("MICROSOFT_APPLICATION_SECRET"),
+            "scope": "read_user",
+            "tid": environ.get("MICROSOFT_TENANT_ID"), # Get from the Azure portal
+            "aud": environ.get("MICROSOFT_AUDIENCE"),  # usually the same as client_id
+            "iss": environ.get("MICROSOFT_ISSUER"), # Get from the Azure portal, example: 'https://login.microsoftonline.com/<tenant_id>/v2.0'
+        },
+    },
 }

@@ -7,7 +7,6 @@ from oauthlogin.exceptions import OAuthError
 from oauthlogin.providers import OAuthProvider, OAuthToken, OAuthUser
 
 class MicrosoftOAuthProvider(OAuthProvider):
-    # https://learn.microsoft.com/sv-se/azure/active-directory/develop/v2-protocols-oidc
     # https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
    
     authorization_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"

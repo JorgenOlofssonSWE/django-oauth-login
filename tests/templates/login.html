@@ -14,4 +14,12 @@
     {% csrf_token %}
     <button type="submit">Login with Bitbucket</button>
 </form>
+<form action="{% url 'oauthlogin:login' 'microsoft' %}" method="post">
+    {% csrf_token %}
+    <button type="submit">Login with Microsoft</button>
+</form>
+<form action="{% url 'oauthlogin:login' 'google' %}" method="post">
+    {% csrf_token %}
+    <button type="submit">Login with Google</button>
+</form>
 {% endblock %}

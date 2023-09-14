@@ -6,15 +6,13 @@ from django.utils.translation import gettext_lazy as _
 from oauthlogin.exceptions import OAuthError
 from oauthlogin.providers import OAuthProvider, OAuthToken, OAuthUser
 
-# This is the Google OAuth provider
-class GoogleOAuthProvider(OAuthProvider):
-    authorization_url = "https://accounts.google.com/o/oauth2/v2/auth"
-    discovery_document_url = "https://accounts.google.com/.well-known/openid-configuration"
+class MicrosoftOAuthProvider(OAuthProvider):
+    # https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
+    authorization_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+    discovery_document_url = " https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration" # We should use 'organizations' instead of 'common' if we want to restrict the login to organisations only (not personal accounts)
 
-    google_token_url = "https://oauth2.googleapis.com/token"
-    google_user_url = "https://www.googleapis.com/oauth2/v3/userinfo"
-    google_emails_url = "https://www.googleapis.com/oauth2/v3/userinfo"
-    redirect_uri = "http://127.0.0.1:8000/oauth/google/callback/" 
+    microsoft_token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+    redirect_uri="http://localhost:8000/oauth/microsoft/callback/"
 
     def _get_token(self, request_data,redirect_uri=None):
         if redirect_uri:
@@ -22,7 +20,7 @@ class GoogleOAuthProvider(OAuthProvider):
         request_data["grant_type"] = "authorization_code"
 
         response = requests.post(
-            self.google_token_url,
+            self.microsoft_token_url,
             headers={
                 "Accept": "application/json",
             },
@@ -39,7 +37,7 @@ class GoogleOAuthProvider(OAuthProvider):
             access_token=data["access_token"]
         )
 
-        # Expiration and refresh tokens are optional in Google depending on the access_type (offline/online)
+        # Expiration and refresh tokens are optional in Azure depending on the access_type (offline/online)
         if "expires_in" in data:
             oauth_token.access_token_expires_at = timezone.now() + datetime.timedelta(
                 seconds=data["expires_in"]
@@ -61,9 +59,11 @@ class GoogleOAuthProvider(OAuthProvider):
             {
                 "client_id": self.get_client_id(),
                 "client_secret": self.get_client_secret(),
-                "code": code,
+                "code": code,              
             },
             redirect_uri=redirect_uri
+
+
         )
 
     def refresh_oauth_token(self, *, oauth_token):
@@ -76,19 +76,23 @@ class GoogleOAuthProvider(OAuthProvider):
             }
         )
 
-    def get_oauth_user(self, *, oauth_token, id_token):
+    def get_oauth_user(self, *, oauth_token,id_token):
+        # Extract the user from the id_token, the Azure platform send the id_token first response
+        
         user_id = id_token.get("sub",None)
-        verified_primary_email=None
-       
-        if id_token.get('email_verified',False):
-            verified_primary_email=id_token.get('email',None)
+        email=None
 
-        if not verified_primary_email:      
-            raise OAuthError(_("A verified primary email address is required on Google"))
-     
+        if id_token.get('email',''):
+            email=id_token.get('email',None)
+
+        if not email or not user_id:      
+            raise OAuthError(_("A email address is required on Azure"))
+
         return OAuthUser(
             id=user_id,
-            email=verified_primary_email,
-            username=verified_primary_email, #username,
+            email=email,
+            username=email, #username,
         )
     
+
+  

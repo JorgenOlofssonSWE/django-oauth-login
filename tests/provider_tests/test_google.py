@@ -7,6 +7,9 @@ from tests.providers.google import GoogleOAuthProvider
 class DummyGoogleOAuthProvider(GoogleOAuthProvider):
     def generate_state(self) -> str:
         return "dummy_state"
+    
+    def generate_nonce(self) -> str:
+        return "dummy_nonce"
 
     def get_oauth_token(self, code, request):
         return OAuthToken(access_token="gho_key")
@@ -42,7 +45,7 @@ def test_google_provider(client, monkeypatch, settings):
     assert response.status_code == 302
     assert (
         response.url
-        == "https://accounts.google.com/o/oauth2/v2/auth?client_id=test_id&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fgoogle%2Fcallback%2F&response_type=code&scope=user&state=dummy_state" 
+        == "https://accounts.google.com/o/oauth2/v2/auth?client_id=test_id&nonce=dummy_nonce&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fgoogle%2Fcallback%2F&response_type=code&scope=user&state=dummy_state" 
     )
 
     # Googleredirects to the callback url

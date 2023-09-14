@@ -95,7 +95,7 @@ class OAuthProvider:
     def get_oauth_token(self, *, code: str, request: HttpRequest) -> OAuthToken:
         raise NotImplementedError()
 
-    def get_oauth_user(self, *, oauth_token: OAuthToken) -> OAuthUser:
+    def get_oauth_user(self, *, oauth_token: OAuthToken,id_token: Optional[dict] = None) -> OAuthUser:
         raise NotImplementedError()
 
     def get_authorization_url(self, *, request: HttpRequest) -> str:
@@ -195,7 +195,7 @@ class OAuthProvider:
             oauth_token, id_token = result
             self.check_id_token_nonce(returned_nonce=id_token.get("nonce",""), request=request)
             self.validate_id_token(id_token=id_token, request=request)
-            oauth_user = self.get_oauth_user(oauth_token=oauth_token,id_token=id_token)
+            oauth_user = self.get_oauth_user(oauth_token=oauth_token, id_token=id_token)
         else:
             oauth_token = result      
             oauth_user = self.get_oauth_user(oauth_token=oauth_token)

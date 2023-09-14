@@ -1,6 +1,7 @@
 import datetime
 
 import pytest
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 
 from oauthlogin.models import OAuthConnection
@@ -12,6 +13,9 @@ class DummyProvider(OAuthProvider):
 
     def generate_state(self) -> str:
         return "dummy_state"
+    
+    def generate_nonce(self) -> str:
+        return "dummy_nonce"
 
     def refresh_oauth_token(self, *, oauth_token: OAuthToken) -> OAuthToken:
         return OAuthToken(
@@ -71,7 +75,7 @@ def test_dummy_signup(client, settings):
     assert response.status_code == 302
     assert (
         response.url
-        == "https://example.com/oauth/authorize?client_id=dummy_client_id&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
+        == "https://example.com/oauth/authorize?client_id=dummy_client_id&nonce=dummy_nonce&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
     )
 
     # Provider redirects to the callback url
@@ -152,7 +156,7 @@ def test_dummy_login_connection(client, settings):
     assert response.status_code == 302
     assert (
         response.url
-        == "https://example.com/oauth/authorize?client_id=dummy_client_id&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
+        == "https://example.com/oauth/authorize?client_id=dummy_client_id&nonce=dummy_nonce&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
     )
 
     # Provider redirects to the callback url
@@ -221,7 +225,7 @@ def test_dummy_login_without_connection(client, settings):
     assert response.status_code == 302
     assert (
         response.url
-        == "https://example.com/oauth/authorize?client_id=dummy_client_id&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
+        == "https://example.com/oauth/authorize?client_id=dummy_client_id&nonce=dummy_nonce&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
     )
 
     # Provider redirects to the callback url
@@ -260,7 +264,7 @@ def test_dummy_connect(client, settings):
     assert response.status_code == 302
     assert (
         response.url
-        == "https://example.com/oauth/authorize?client_id=dummy_client_id&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
+        == "https://example.com/oauth/authorize?client_id=dummy_client_id&nonce=dummy_nonce&redirect_uri=http%3A%2F%2Ftestserver%2Foauth%2Fdummy%2Fcallback%2F&response_type=code&scope=dummy_scope&state=dummy_state"
     )
 
     # Provider redirects to the callback url
