@@ -17,3 +17,10 @@ class OAuthCannotConnectError(OAuthError):
 
 class OAuthUserAlreadyExistsError(OAuthError):
     pass
+
+class OAuthIDTokenValidationMismatchError(OAuthError):
+    pass
+
+class OAuthProviderNotConfiguredError(OAuthError):
+    pass
+

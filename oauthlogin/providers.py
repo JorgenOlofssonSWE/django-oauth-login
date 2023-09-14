@@ -11,13 +11,13 @@ from django.utils.crypto import get_random_string
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
-from .exceptions import OAuthCannotDisconnectError, OAuthStateMismatchError,OAuthNonceMismatchError
+from .exceptions import (OAuthCannotDisconnectError, OAuthStateMismatchError, OAuthNonceMismatchError,
+                        OAuthIDTokenValidationMismatchError, OAuthProviderNotConfiguredError)
 from .models import OAuthConnection
 
-SESSION_STATE_KEY = "oauthlogin_state"
 SESSION_NEXT_KEY = "oauthlogin_next"
 SESSION_NONCE_KEY = "oauthlogin_nonce"
-
+SESSION_STATE_KEY = "oauthlogin_state"
 
 class OAuthToken:
     def __init__(
@@ -57,23 +57,36 @@ class OAuthProvider:
         client_secret: str,
         # Not necessarily required, but commonly used
         scope: str = "",
+        tenant: str = "", # Azure tenant type or id, example: 'common' for Azure
+        response_type: str = "",
         # Authentication backend only needs to be set if you have custom backends which don't include the default
         authentication_backend: str = "django.contrib.auth.backends.ModelBackend",
+        # Fields for id_token validation
+        aud: str = "", # Audience, example: 'api://<client_id>' for Azure
+        tid: str = "", # Tenant ID, example: '<tenant_id>' for Azure
+        iss: str = "", # Issuer, example: 'https://login.microsoftonline.com/<tenant_id>/v2.0' for Azure
+
     ):
         self.provider_key = provider_key
         self.client_id = client_id
         self.client_secret = client_secret
         self.scope = scope
+        self.tenant = tenant
+        self.response_type = response_type
         self.authentication_backend = authentication_backend
+        self.aud = aud
+        self.tid = tid
+        self.iss = iss
 
     def get_authorization_url_params(self, *, request: HttpRequest) -> dict:
+        self.response_type = "code" if self.response_type == "" else self.response_type
         return {
             "redirect_uri": self.get_callback_url(request=request),
             "client_id": self.get_client_id(),
             "scope": self.get_scope(),
             "state": self.generate_state(),
             "nonce": self.generate_nonce(),
-            "response_type": "code",
+            "response_type": self.response_type,
         }
 
     def refresh_oauth_token(self, *, oauth_token: OAuthToken) -> OAuthToken:
@@ -108,15 +121,27 @@ class OAuthProvider:
         return get_random_string(length=24)
 
     def check_request_state(self, *, request: HttpRequest) -> None:
-        state = request.GET["state"]
+        state = request.GET.get("state", '')
         expected_state = request.session.pop(SESSION_STATE_KEY,'')
         if not secrets.compare_digest(state, expected_state):
             raise OAuthStateMismatchError()
-        
+      
     def check_id_token_nonce(self, *, returned_nonce:str, request: HttpRequest) -> None:
         expected_nonce = request.session.pop(SESSION_NONCE_KEY,'')
         if not secrets.compare_digest(returned_nonce, expected_nonce):
             raise OAuthNonceMismatchError()
+    
+    def validate_id_token(self, *, id_token:dict, request: HttpRequest) -> None:
+        expected_aud = settings.OAUTH_LOGIN_PROVIDERS.get(self.provider_key, {}).get("kwargs", {}).get("aud", "")
+        expected_tid = settings.OAUTH_LOGIN_PROVIDERS.get(self.provider_key, {}).get("kwargs", {}).get("tid", "")
+        expected_iss = settings.OAUTH_LOGIN_PROVIDERS.get(self.provider_key, {}).get("kwargs", {}).get("iss", "")
+        # Only try to validate if we have an expected value
+        if expected_aud and not secrets.compare_digest(id_token.get("aud",""), expected_aud):
+            raise OAuthIDTokenValidationMismatchError()
+        if expected_tid and not secrets.compare_digest(id_token.get("tid",""), expected_tid):
+            raise OAuthIDTokenValidationMismatchError()
+        if expected_iss and not secrets.compare_digest(id_token.get("iss",""), expected_iss):
+            raise OAuthIDTokenValidationMismatchError()
 
     def handle_login_request(self, *, request: HttpRequest) -> HttpResponse:
         authorization_url = self.get_authorization_url(request=request)
@@ -164,15 +189,16 @@ class OAuthProvider:
     def handle_callback_request(self, *, request: HttpRequest) -> HttpResponse:
         self.check_request_state(request=request)
 
-        result = self.get_oauth_token(code=request.GET["code"], request=request)
+        result = self.get_oauth_token(code=request.GET.get("code",""), request=request)
         if isinstance(result, tuple) and len(result) == 2:
             # If we get a tuple back, it's (oauth_token, id_token_nonce)
-            oauth_token, id_token_nonce = result
-            self.check_id_token_nonce(returned_nonce=id_token_nonce, request=request)
+            oauth_token, id_token = result
+            self.check_id_token_nonce(returned_nonce=id_token.get("nonce",""), request=request)
+            self.validate_id_token(id_token=id_token, request=request)
+            oauth_user = self.get_oauth_user(oauth_token=oauth_token,id_token=id_token)
         else:
-            oauth_token = result
-       
-        oauth_user = self.get_oauth_user(oauth_token=oauth_token)
+            oauth_token = result      
+            oauth_user = self.get_oauth_user(oauth_token=oauth_token)
        
         if request.user.is_authenticated:
             connection = OAuthConnection.connect(
@@ -217,9 +243,12 @@ class OAuthProvider:
 
 def get_oauth_provider_instance(*, provider_key: str) -> OAuthProvider:
     OAUTH_LOGIN_PROVIDERS = getattr(settings, "OAUTH_LOGIN_PROVIDERS", {})
-    provider_class_path = OAUTH_LOGIN_PROVIDERS[provider_key]["class"]
-    provider_class = import_string(provider_class_path)
-    provider_kwargs = OAUTH_LOGIN_PROVIDERS[provider_key].get("kwargs", {})
+    try:
+        provider_class_path = OAUTH_LOGIN_PROVIDERS[provider_key]["class"]
+        provider_class = import_string(provider_class_path)
+        provider_kwargs = OAUTH_LOGIN_PROVIDERS[provider_key].get("kwargs", {})
+    except KeyError:
+        raise OAuthProviderNotConfiguredError()
     return provider_class(provider_key=provider_key, **provider_kwargs)
 
 

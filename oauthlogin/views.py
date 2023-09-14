@@ -9,6 +9,8 @@ from .exceptions import (
     OAuthStateMismatchError,
     OAuthNonceMismatchError,
     OAuthUserAlreadyExistsError,
+    OAuthIDTokenValidationMismatchError,
+    OAuthProviderNotConfiguredError
 )
 from .providers import get_oauth_provider_instance
 
@@ -17,8 +19,15 @@ class OAuthLoginView(View):
     def post(self, request, provider):
         if request.user.is_authenticated and request.user.oauth_connections.exists():
             return redirect("/")
-
-        provider_instance = get_oauth_provider_instance(provider_key=provider)
+        try:
+            provider_instance = get_oauth_provider_instance(provider_key=provider)
+        except OAuthProviderNotConfiguredError:
+            return render(
+                request,
+                "oauthlogin/error.html",
+                {"oauth_error": _("Provider %s is not configured.") % provider},
+                status=400,
+            )
         return provider_instance.handle_login_request(request=request)
 
 
@@ -28,9 +37,17 @@ class OAuthCallbackView(View):
     """
 
     def get(self, request, provider):
-        provider_instance = get_oauth_provider_instance(provider_key=provider)
         try:
+            provider_instance = get_oauth_provider_instance(provider_key=provider)
             return provider_instance.handle_callback_request(request=request)
+        
+        except OAuthProviderNotConfiguredError:
+            return render(
+                request,
+                "oauthlogin/error.html",
+                {"oauth_error": _("Provider %s is not configured.") % provider},
+                status=400,
+            )
         except OAuthUserAlreadyExistsError:
             return render(
                 request,
@@ -59,6 +76,21 @@ class OAuthCallbackView(View):
                 request,
                 "oauthlogin/error.html",
                 {"oauth_error": _("Cannot connect, you have already connected your email address to another user in this system.")},
+                status=400,
+            )
+        except OAuthIDTokenValidationMismatchError:
+            return render(
+                request,
+                "oauthlogin/error.html",
+                {"oauth_error": _("The id_token did not validate correctly.")},
+                status=400,
+            )
+        except OAuthProviderNotConfiguredError:
+            print ('FUUU')
+            return render(
+                request,
+                "oauthlogin/error.html",
+                {"oauth_error": _("Provider is not configured.")},
                 status=400,
             )
 
